@@ -32,7 +32,9 @@ async fn main() {
 
     let task = async {
         match cli.command {
-            Commands::Init { auth_token, ct0 } => cmd_init(&config_path, auth_token, ct0).await,
+            Commands::Init { auth_token, ct0, systemd_credentials } => {
+                cmd_init(&config_path, auth_token, ct0, systemd_credentials).await
+            },
             Commands::Register => cmd_register(&config_path).await,
             Commands::Listen => cmd_listen(&config_path).await,
             Commands::Status => cmd_status(&config_path).await,
@@ -87,28 +89,44 @@ async fn cmd_init(
     config_path: &PathBuf,
     arg_auth_token: Option<String>,
     arg_ct0: Option<String>,
+    systemd_credentials: bool,
 ) -> Result<()> {
     eprintln!("{}", style("Initializing configuration").bold());
     eprintln!();
 
-    let auth_token = match arg_auth_token {
-        Some(v) => v,
-        None => Password::new()
-            .with_prompt("auth_token")
-            .interact()
-            .map_err(|e| error::AngelicAngelError::Config(format!("input error: {}", e)))?,
-    };
+    let twitter = if systemd_credentials {
+        eprintln!(
+            "{} Twitter cookies will be read from systemd credentials '{}' and '{}'.",
+            style("info").cyan().bold(),
+            config::AUTH_TOKEN_CREDENTIAL,
+            config::CT0_CREDENTIAL
+        );
+        config::TwitterConfig::default()
+    } else {
+        let auth_token = match arg_auth_token {
+            Some(v) => v,
+            None => Password::new()
+                .with_prompt("auth_token")
+                .interact()
+                .map_err(|e| error::AngelicAngelError::Config(format!("input error: {}", e)))?,
+        };
 
-    let ct0 = match arg_ct0 {
-        Some(v) => v,
-        None => Input::new()
-            .with_prompt("ct0")
-            .interact_text()
-            .map_err(|e| error::AngelicAngelError::Config(format!("input error: {}", e)))?,
+        let ct0 = match arg_ct0 {
+            Some(v) => v,
+            None => Input::new()
+                .with_prompt("ct0")
+                .interact_text()
+                .map_err(|e| error::AngelicAngelError::Config(format!("input error: {}", e)))?,
+        };
+
+        config::TwitterConfig {
+            auth_token: Some(auth_token),
+            ct0: Some(ct0),
+        }
     };
 
     let config = Config {
-        twitter: config::TwitterConfig { auth_token, ct0 },
+        twitter,
         registration: None,
     };
 
@@ -135,10 +153,11 @@ async fn cmd_register(config_path: &PathBuf) -> Result<()> {
     )
     .await?;
 
+    let twitter_credentials = config.twitter.resolve()?;
     spin(
         "Registering with Twitter...",
         "Twitter Push registered",
-        twitter::register(&config.twitter, &subscription),
+        twitter::register(&twitter_credentials, &subscription),
     )
     .await?;
 
@@ -182,12 +201,12 @@ async fn cmd_status(config_path: &PathBuf) -> Result<()> {
         Ok(config) => {
             eprintln!("{}  {}", style("Config").cyan().bold(), style(config_path.display()).dim());
             eprintln!(
-                "  auth_token  {}...",
-                style(&config.twitter.auth_token.chars().take(20).collect::<String>()).dim()
+                "  auth_token  {}",
+                style(config.twitter.auth_token_source().label()).dim()
             );
             eprintln!(
-                "  ct0         {}...",
-                style(&config.twitter.ct0.chars().take(20).collect::<String>()).dim()
+                "  ct0         {}",
+                style(config.twitter.ct0_source().label()).dim()
             );
 
             eprintln!();
