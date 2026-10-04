@@ -1,0 +1,46 @@
+[Unit]
+Description=Angelic Angel X Web Push listener
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=angelic-angel
+Group=angelic-angel
+StateDirectory=angelic-angel
+StateDirectoryMode=0700
+
+# Replace these root-readable source paths with your secret loader output.
+# systemd copies them into a private per-service credentials directory and
+# exposes only CREDENTIALS_DIRECTORY to the process.
+LoadCredential=auth_token:/run/angelic-angel-secrets/auth_token
+LoadCredential=ct0:/run/angelic-angel-secrets/ct0
+
+Environment=WEBHOOK_ENDPOINT=http://127.0.0.1:8080/internal/x-web-push
+ExecStart=/usr/local/bin/angelic-angel -c /var/lib/angelic-angel/angelic-angel.toml listen
+
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=20
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+LimitCORE=0
+MemoryMax=256M
+TasksMax=32
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=angelic-angel
+
+[Install]
+WantedBy=multi-user.target
