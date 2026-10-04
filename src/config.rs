@@ -93,25 +93,36 @@ impl TwitterConfig {
     }
 
     fn resolve_from_dir(&self, credentials_dir: Option<&Path>) -> Result<TwitterCredentials> {
-        let auth_token = read_credential(credentials_dir, AUTH_TOKEN_CREDENTIAL)?
-            .or_else(|| self.auth_token.clone())
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| {
-                AngelicAngelError::Config(format!(
-                    "Twitter auth_token is missing; provide {AUTH_TOKEN_CREDENTIAL} via systemd LoadCredential or store it in the config"
-                ))
-            })?;
+        let systemd_auth_token = read_credential(credentials_dir, AUTH_TOKEN_CREDENTIAL)?;
+        let systemd_ct0 = read_credential(credentials_dir, CT0_CREDENTIAL)?;
 
-        let ct0 = read_credential(credentials_dir, CT0_CREDENTIAL)?
-            .or_else(|| self.ct0.clone())
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| {
-                AngelicAngelError::Config(format!(
-                    "Twitter ct0 is missing; provide {CT0_CREDENTIAL} via systemd LoadCredential or store it in the config"
-                ))
-            })?;
-
-        Ok(TwitterCredentials { auth_token, ct0 })
+        match (systemd_auth_token, systemd_ct0) {
+            (Some(auth_token), Some(ct0)) => Ok(TwitterCredentials { auth_token, ct0 }),
+            (Some(_), None) | (None, Some(_)) => Err(AngelicAngelError::Config(format!(
+                "incomplete systemd Twitter credentials; provide both {AUTH_TOKEN_CREDENTIAL} and {CT0_CREDENTIAL}"
+            ))),
+            (None, None) => {
+                let auth_token = self
+                    .auth_token
+                    .clone()
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| {
+                        AngelicAngelError::Config(format!(
+                            "Twitter auth_token is missing; provide {AUTH_TOKEN_CREDENTIAL} via systemd LoadCredential or store it in the config"
+                        ))
+                    })?;
+                let ct0 = self
+                    .ct0
+                    .clone()
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| {
+                        AngelicAngelError::Config(format!(
+                            "Twitter ct0 is missing; provide {CT0_CREDENTIAL} via systemd LoadCredential or store it in the config"
+                        ))
+                    })?;
+                Ok(TwitterCredentials { auth_token, ct0 })
+            }
+        }
     }
 }
 
@@ -222,6 +233,21 @@ ct0 = "legacy-ct0"
 
         assert_eq!(credentials.auth_token, "credential-auth");
         assert_eq!(credentials.ct0, "credential-ct0");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn incomplete_systemd_credentials_fail_closed() {
+        let dir = temp_dir("incomplete-credentials");
+        fs::write(dir.join(AUTH_TOKEN_CREDENTIAL), "credential-auth\n").unwrap();
+
+        let config = TwitterConfig {
+            auth_token: Some("config-auth".to_string()),
+            ct0: Some("config-ct0".to_string()),
+        };
+        let error = config.resolve_from_dir(Some(&dir)).unwrap_err();
+
+        assert!(error.to_string().contains("incomplete systemd Twitter credentials"));
         fs::remove_dir_all(dir).unwrap();
     }
 
