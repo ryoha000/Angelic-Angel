@@ -80,10 +80,10 @@ impl TwitterConfig {
     }
 
     fn source_for(&self, name: &str, config_value: Option<&str>) -> CredentialSource {
-        if let Some(dir) = std::env::var_os("CREDENTIALS_DIRECTORY").map(PathBuf::from)
-            && dir.join(name).is_file()
-        {
-            return CredentialSource::SystemdCredential;
+        if let Some(dir) = std::env::var_os("CREDENTIALS_DIRECTORY").map(PathBuf::from) {
+            if dir.join(name).is_file() {
+                return CredentialSource::SystemdCredential;
+            }
         }
         if config_value.is_some_and(|value| !value.is_empty()) {
             CredentialSource::ConfigFile
