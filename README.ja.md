@@ -58,9 +58,49 @@ angelic-angel init
 
 # 引数を指定する場合
 angelic-angel init --auth-token YOUR_AUTH_TOKEN --ct0 YOUR_CT0
+
+# systemd credentials を使い、Cookie を設定ファイルに保存しない場合
+angelic-angel init --systemd-credentials
 ```
 
-Twitter の認証情報を含む `angelic-angel.toml` が作成されます。
+通常モードでは Twitter/X の Cookie を `angelic-angel.toml` に保存します。`--systemd-credentials` を指定すると、設定ファイルには `auth_token` / `ct0` を保存せず、実行時に systemd credential の `auth_token` と `ct0` を読み込みます。
+
+### systemd credentials を使う場合
+
+常駐サーバでは、X のログイン Cookie を設定ファイルに保存せず systemd credentials で渡せます。
+
+```ini
+[Service]
+User=angelic-angel
+LoadCredential=auth_token:/run/angelic-angel-secrets/auth_token
+LoadCredential=ct0:/run/angelic-angel-secrets/ct0
+```
+
+systemd は credential をサービス専用ディレクトリにコピーし、その場所を `$CREDENTIALS_DIRECTORY` としてプロセスへ渡します。Angelic Angel は `$CREDENTIALS_DIRECTORY/auth_token` と `$CREDENTIALS_DIRECTORY/ct0` を読み、TOML 内の値より優先します。片方だけ存在する場合は、別の保存元と混在させずエラー終了します。
+
+Cookie を含まない永続設定は次のように作成します。
+
+```sh
+sudo install -d -o angelic-angel -g angelic-angel -m 0700 /var/lib/angelic-angel
+sudo -u angelic-angel angelic-angel \
+  -c /var/lib/angelic-angel/angelic-angel.toml init --systemd-credentials
+```
+
+最初の `register` も credential が読み込まれた状態で実行する必要があります。たとえばシークレットローダーが root のみ読み取り可能なファイルを作成した後:
+
+```sh
+sudo systemd-run --wait --pipe \
+  -p User=angelic-angel \
+  -p Group=angelic-angel \
+  -p LoadCredential=auth_token:/run/angelic-angel-secrets/auth_token \
+  -p LoadCredential=ct0:/run/angelic-angel-secrets/ct0 \
+  /usr/local/bin/angelic-angel \
+  -c /var/lib/angelic-angel/angelic-angel.toml register
+```
+
+登録後は通常の systemd サービスとして常駐させます。例は [`examples/angelic-angel.service`](examples/angelic-angel.service) を参照してください。
+
+設定ファイルには Web Push の秘密鍵と登録状態が残るため、Unix では保存時に mode `0600` を設定します。systemd credential モードでは X の Cookie 自体は設定ファイルへ書き込みません。
 
 ### 2. プッシュサブスクリプションの登録
 
