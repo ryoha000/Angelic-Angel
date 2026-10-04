@@ -143,7 +143,7 @@ fn read_credential(credentials_dir: Option<&Path>, name: &str) -> Result<Option<
             )));
         }
     };
-    let value = value.trim_end_matches(['\r', '\n']).to_string();
+    let value = value.trim_end_matches(&['\r', '\n'][..]).to_string();
     if value.is_empty() {
         return Err(AngelicAngelError::Config(format!(
             "systemd credential {name} is empty"
