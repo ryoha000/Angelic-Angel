@@ -1,4 +1,4 @@
-use crate::config::TwitterConfig;
+use crate::config::TwitterCredentials;
 use crate::error::{Result, AngelicAngelError};
 use crate::push::PushSubscription;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -10,7 +10,7 @@ const AUTHORIZATION_BEARER: &str = "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIz
 const DEVICE_ID: &str = "Mac/Firefox";
 
 pub async fn register(
-    twitter_config: &TwitterConfig,
+    twitter_config: &TwitterCredentials,
     push_subscription: &PushSubscription,
 ) -> Result<()> {
     let client = Client::new();
@@ -20,7 +20,7 @@ pub async fn register(
 
 async fn register_push_subscription(
     client: &Client,
-    twitter_config: &TwitterConfig,
+    twitter_config: &TwitterCredentials,
     push_subscription: &PushSubscription,
 ) -> Result<()> {
     let url = format!("{}/notifications/settings/login.json", TWITTER_API_BASE);

@@ -30,6 +30,9 @@ pub enum Commands {
         /// Twitter ct0 (CSRF token)
         #[arg(long)]
         ct0: Option<String>,
+        /// Do not store Twitter cookies in the config; read auth_token and ct0 from systemd credentials at runtime
+        #[arg(long, conflicts_with_all = ["auth_token", "ct0"])]
+        systemd_credentials: bool,
     },
     /// Register AutoPush subscription and Twitter Push endpoint
     Register,

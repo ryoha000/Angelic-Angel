@@ -140,7 +140,8 @@ async fn try_connect(registration: &mut Registration, config_path: &Path) -> Res
                 keys: new_keys.clone(),
             };
 
-            twitter::register(&full_config.twitter, &subscription).await?;
+            let twitter_credentials = full_config.twitter.resolve()?;
+            twitter::register(&twitter_credentials, &subscription).await?;
             tracing::info!("Twitter API re-registration complete");
 
             registration.endpoint = new_reg.endpoint.clone();

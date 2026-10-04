@@ -58,9 +58,49 @@ angelic-angel init
 
 # Or with arguments
 angelic-angel init --auth-token YOUR_AUTH_TOKEN --ct0 YOUR_CT0
+
+# Or create a secretless config for systemd credentials
+angelic-angel init --systemd-credentials
 ```
 
-This creates `angelic-angel.toml` with your Twitter credentials.
+The default modes store the Twitter cookies in `angelic-angel.toml`. With `--systemd-credentials`, the config contains no `auth_token` or `ct0`; they are read at runtime from systemd credentials named `auth_token` and `ct0`.
+
+### systemd credentials
+
+For a long-running server, use systemd credentials instead of persisting the X session cookies in the config.
+
+```ini
+[Service]
+User=angelic-angel
+LoadCredential=auth_token:/run/angelic-angel-secrets/auth_token
+LoadCredential=ct0:/run/angelic-angel-secrets/ct0
+```
+
+systemd exposes the copied credential files under `$CREDENTIALS_DIRECTORY`. Angelic Angel reads `$CREDENTIALS_DIRECTORY/auth_token` and `$CREDENTIALS_DIRECTORY/ct0` and gives them precedence over values in the TOML file. If only one of the two systemd credentials is present, startup fails rather than mixing credential sources.
+
+Initialize the persistent state without cookies:
+
+```sh
+sudo install -d -o angelic-angel -g angelic-angel -m 0700 /var/lib/angelic-angel
+sudo -u angelic-angel angelic-angel \
+  -c /var/lib/angelic-angel/angelic-angel.toml init --systemd-credentials
+```
+
+The first `register` invocation must also run with the credentials loaded. For example, after your secret loader has created the root-readable source files:
+
+```sh
+sudo systemd-run --wait --pipe \
+  -p User=angelic-angel \
+  -p Group=angelic-angel \
+  -p LoadCredential=auth_token:/run/angelic-angel-secrets/auth_token \
+  -p LoadCredential=ct0:/run/angelic-angel-secrets/ct0 \
+  /usr/local/bin/angelic-angel \
+  -c /var/lib/angelic-angel/angelic-angel.toml register
+```
+
+After registration, run the listener as a normal systemd service. See [`examples/angelic-angel.service`](examples/angelic-angel.service).
+
+The config still contains Web Push private key material and registration state, so Angelic Angel writes it with mode `0600` on Unix. The X cookies themselves are not written to it in systemd-credential mode.
 
 ### 2. Register push subscription
 
